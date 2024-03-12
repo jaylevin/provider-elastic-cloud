@@ -1,36 +1,553 @@
-name: hashicorp/null
+name: elastic/ec
 resources:
-    null_resource:
+    ec_deployment:
         subCategory: ""
-        description: The null_resource resource implements the standard resource lifecycle but takes no further action. The triggers argument allows specifying an arbitrary set of values that, when changed, will cause the resource to be replaced.
-        name: null_resource
-        title: null_resource Resource - terraform-provider-null
+        description: Provides an Elastic Cloud deployment resource, which allows deployments to be created, updated, and deleted.
+        name: ec_deployment
+        title: ec_deployment Resource
         examples:
-            - name: cluster
+            - name: example_minimal
               manifest: |-
                 {
-                  "connection": [
+                  "deployment_template_id": "aws-io-optimized-v2",
+                  "elasticsearch": {
+                    "hot": {
+                      "autoscaling": {}
+                    }
+                  },
+                  "enterprise_search": {},
+                  "integrations_server": {},
+                  "kibana": {},
+                  "name": "my_example_deployment",
+                  "region": "us-east-1",
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+            - name: example_minimal
+              manifest: |-
+                {
+                  "deployment_template_id": "aws-io-optimized-v2",
+                  "elasticsearch": {
+                    "config": {
+                      "user_settings_yaml": "${file(\"./es.yaml\")}"
+                    },
+                    "hot": {
+                      "autoscaling": {}
+                    }
+                  },
+                  "enterprise_search": {},
+                  "integrations_server": {},
+                  "kibana": {},
+                  "name": "my_example_deployment",
+                  "region": "us-east-1",
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+            - name: example_minimal
+              manifest: |-
+                {
+                  "deployment_template_id": "aws-io-optimized-v2",
+                  "elasticsearch": {
+                    "autoscale": "true",
+                    "cold": {
+                      "autoscaling": {}
+                    },
+                    "frozen": {
+                      "autoscaling": {}
+                    },
+                    "hot": {
+                      "autoscaling": {
+                        "max_size": "128g",
+                        "max_size_resource": "memory"
+                      },
+                      "size": "8g"
+                    },
+                    "ml": {
+                      "autoscaling": {}
+                    },
+                    "warm": {
+                      "autoscaling": {}
+                    }
+                  },
+                  "enterprise_search": {},
+                  "integrations_server": {},
+                  "kibana": {},
+                  "lifecycle": [
                     {
-                      "host": "${element(aws_instance.cluster.*.public_ip, 0)}"
+                      "ignore_changes": [
+                        "${elasticsearch.hot.size}"
+                      ]
                     }
                   ],
-                  "provisioner": {
-                    "remote-exec": [
+                  "region": "us-east-1",
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+            - name: example_observability
+              manifest: |-
+                {
+                  "deployment_template_id": "aws-io-optimized-v2",
+                  "elasticsearch": {
+                    "hot": {
+                      "autoscaling": {}
+                    }
+                  },
+                  "kibana": {},
+                  "name": "my_example_deployment",
+                  "observability": {
+                    "deployment_id": "${ec_deployment.example_minimal.id}"
+                  },
+                  "region": "us-east-1",
+                  "tags": {
+                    "monitoring": "source"
+                  },
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+            - name: source_deployment
+              manifest: |-
+                {
+                  "deployment_template_id": "aws-io-optimized-v2",
+                  "elasticsearch": {
+                    "hot": {
+                      "autoscaling": {},
+                      "size": "1g"
+                    }
+                  },
+                  "name": "my_ccs_source",
+                  "region": "us-east-1",
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+            - name: ccs
+              manifest: |-
+                {
+                  "deployment_template_id": "aws-cross-cluster-search-v2",
+                  "elasticsearch": {
+                    "hot": {
+                      "autoscalign": {}
+                    },
+                    "remote_cluster": [
                       {
-                        "inline": [
-                          "bootstrap-cluster.sh ${join(\" \", aws_instance.cluster.*.private_ip)}"
-                        ]
+                        "alias": "${ec_deployment.source_deployment.name}",
+                        "deployment_id": "${ec_deployment.source_deployment.id}",
+                        "ref_id": "${ec_deployment.source_deployment.elasticsearch.0.ref_id}"
                       }
                     ]
                   },
-                  "triggers": {
-                    "cluster_instance_ids": "${join(\",\", aws_instance.cluster.*.id)}"
-                  }
+                  "kibana": {},
+                  "name": "ccs deployment",
+                  "region": "us-east-1",
+                  "version": "${data.ec_stack.latest.version}"
+                }
+              references:
+                version: data.ec_stack.latest.version
+        argumentDocs:
+            account_id: (String) The ID of the Account.
+            alias: (String) Deployment alias, affects the format of the resource URLs.
+            apm: (String)
+            apm_secret_token: (String, Sensitive)
+            as_file: (Boolean) If true, the secret is handled as a file. Otherwise, it's handled as a plain string.
+            autoscale: (Boolean) Enable or disable autoscaling. Defaults to the setting coming from the deployment template.
+            autoscaling: (Attributes) Optional Elasticsearch autoscaling settings, such a maximum and minimum size and resources. (see below for nested schema)
+            cloud_id: (String) The encoded Elasticsearch credentials to use in Beats or Logstash
+            cold: (Attributes) 'cold' topology element (see below for nested schema)
+            config: (Attributes) Elasticsearch settings which will be applied to all topologies (see below for nested schema)
+            coordinating: (Attributes) 'coordinating' topology element (see below for nested schema)
+            debug_enabled: (Boolean) Optionally enable debug mode for Integrations Server instances - defaults to false
+            deployment_id: (String) Remote deployment ID
+            deployment_template_id: (String) Deployment template identifier to create the deployment from. See the full list of regions and deployment templates available in ESS.
+            docker_image: (String) Overrides the docker image the Elasticsearch nodes will use. Note that this field will only work for internal users only.
+            elasticsearch: (Attributes) Elasticsearch cluster definition (see below for nested schema)
+            elasticsearch_cluster_ref_id: (String)
+            elasticsearch_password: (String, Sensitive) Password for authenticating to the Elasticsearch resource.
+            elasticsearch_username: (String) Username for authenticating to the Elasticsearch resource.
+            enabled: (Boolean) Indicates if Snapshotting is enabled.
+            endpoints: (Object) URLs for the accessing the Fleet and APM API's within this Integrations Server resource. (see below for nested schema)
+            enterprise_search: (Attributes) Enterprise Search cluster definition. (see below for nested schema)
+            extension: (Attributes Set) Optional Elasticsearch extensions such as custom bundles or plugins. (see below for nested schema)
+            fleet: (String)
+            frozen: (Attributes) 'frozen' topology element (see below for nested schema)
+            hot: (Attributes) 'hot' topology element (see below for nested schema)
+            http_endpoint: (String) The Elasticsearch resource HTTP endpoint
+            https_endpoint: (String) The Elasticsearch resource HTTPs endpoint
+            id: (String) Unique identifier of this deployment.
+            instance_configuration_id: (String) Computed Instance Configuration ID of the topology element
+            integrations_server: (Attributes) Integrations Server cluster definition. Integrations Server replaces apm in Stack versions > 8.0 (see below for nested schema)
+            keystore_contents: (Attributes Map) Keystore contents that are controlled by the deployment resource. (see below for nested schema)
+            kibana: (Attributes) Kibana cluster definition.
+            logs: (Boolean)
+            master: (Attributes) 'master' topology element (see below for nested schema)
+            max_size: (String) Maximum size value for the maximum autoscaling setting.
+            max_size_resource: (String) Maximum resource type for the maximum autoscaling setting.
+            metrics: (Boolean)
+            min_size: (String) Minimum size value for the minimum autoscaling setting.
+            min_size_resource: (String) Minimum resource type for the minimum autoscaling setting.
+            ml: (Attributes) 'ml' topology element (see below for nested schema)
+            name: (String) Name for the deployment
+            node_roles: (Set of String) The computed list of node roles for the current topology element
+            node_type_appserver: (Boolean)
+            node_type_connector: (Boolean)
+            node_type_data: (String) The node type for the Elasticsearch Topology element (data node)
+            node_type_ingest: (String) The node type for the Elasticsearch Topology element (ingest node)
+            node_type_master: (String) The node type for the Elasticsearch Topology element (master node)
+            node_type_ml: (String) The node type for the Elasticsearch Topology element (machine learning node)
+            node_type_worker: (Boolean)
+            observability: (Attributes) Observability settings that you can set to ship logs and metrics to a deployment. The target deployment can also be the current deployment itself by setting observability.deployment_id to self. (see below for nested schema)
+            plugins: (Set of String) List of Elasticsearch supported plugins, which vary from version to version. Check the Stack Pack version to see which plugins are supported for each version. This is currently only available from the UI and ecctl
+            policy_override_json: (String) Computed policy overrides set directly via the API or other clients.
+            ref_id: (String) A human readable reference for the Elasticsearch resource. The default value main-elasticsearch is recommended.
+            reference: (Attributes) Cluster snapshot reference repository settings, containing the repository name in ECE fashion (see below for nested schema)
+            region: (String) Elasticsearch Service (ESS) region where the deployment should be hosted. For Elastic Cloud Enterprise (ECE) installations, set to `"ece-region".
+            relationship_id: (String) The ID of the external trust relationship.
+            remote_cluster: (Attributes Set) Optional Elasticsearch remote clusters to configure for the Elasticsearch resource, can be set multiple times (see below for nested schema)
+            repository: (Attributes) Snapshot repository configuration (see below for nested schema)
+            repository_name: (String) ECE snapshot repository name, from the '/platform/configuration/snapshots/repositories' endpoint
+            request_id: (String) Request ID to set when you create the deployment. Use it only when previous attempts return an error and request_id is returned as part of the error.
+            reset_elasticsearch_password: (Boolean) Explicitly resets the elasticsearch_password when true
+            resource_id: (String) The Elasticsearch resource unique identifier
+            size: (String) Amount of "size_resource" per node in the "g" notation
+            size_resource: (String) Size type, defaults to "memory".
+            skip_unavailable: (Boolean) If true, skip the cluster during search when disconnected
+            snapshot: (Attributes) (ECE only) Snapshot configuration settings for an Elasticsearch cluster.
+            snapshot_name: (String) Name of the snapshot to restore. Use 'latest_success' to get the most recent successful snapshot.
+            snapshot_source: (Attributes) Restores data from a snapshot of another deployment.
+            source_elasticsearch_cluster_id: (String) ID of the Elasticsearch cluster that will be used as the source of the snapshot
+            strategy: (String) Configuration strategy type autodetect, grow_and_shrink, rolling_grow_and_shrink, rolling_all
+            tags: (Map of String) Optional map of deployment tags
+            traffic_filter: (Set of String) List of traffic filters rule identifiers that will be applied to the deployment.
+            trust_account: (Attributes Set) Optional Elasticsearch account trust settings. (see below for nested schema)
+            trust_all: (Boolean) If true, all clusters in this account will by default be trusted and the trust_allowlist is ignored.
+            trust_allowlist: (Set of String) The list of clusters to trust. Only used when trust_all is false.
+            trust_external: (Attributes Set) Optional Elasticsearch external trust settings. (see below for nested schema)
+            type: (String) Extension type, only bundle or plugin are supported.
+            url: (String) Bundle or plugin URL, the extension URL can be obtained from the ec_deployment_extension.<name>.url attribute or the API and cannot be a random HTTP address that is hosted elsewhere.
+            user_settings_json: (String) JSON-formatted user level "elasticsearch.yml" setting overrides
+            user_settings_override_json: (String) JSON-formatted admin (ECE) level "elasticsearch.yml" setting overrides
+            user_settings_override_yaml: (String) YAML-formatted admin (ECE) level "elasticsearch.yml" setting overrides
+            user_settings_yaml: (String) YAML-formatted user level "elasticsearch.yml" setting overrides
+            value: (String, Sensitive) Secret value. This can either be a string or a JSON object that is stored as a JSON string in the keystore.
+            version: (String) Elastic Stack version to use for all of the deployment resources.
+            warm: (Attributes) 'warm' topology element (see below for nested schema)
+            zone_count: (Number) Number of zones that the Elasticsearch cluster will span. This is used to set HA
+        importStatements:
+            - terraform import ec_deployment.search 320b7b540dfc967a7a649c18e2fce4ed
+    ec_deployment_elasticsearch_keystore:
+        subCategory: ""
+        description: Provides an Elastic Cloud Deployment Elasticsearch keystore resource, which allows you to create and update Elasticsearch keystore settings.
+        name: ec_deployment_elasticsearch_keystore
+        title: ec_deployment_elasticsearch_keystore Resource
+        examples:
+            - name: gcs_credential
+              manifest: |-
+                {
+                  "as_file": true,
+                  "deployment_id": "${ec_deployment.example_keystore.id}",
+                  "setting_name": "gcs.client.default.credentials_file",
+                  "value": "${file(\"service-account-key.json\")}"
+                }
+              references:
+                deployment_id: ec_deployment.example_keystore.id
+              dependencies:
+                ec_deployment.example_keystore: |-
+                    {
+                      "deployment_template_id": "aws-io-optimized-v2",
+                      "elasticsearch": {
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "region": "us-east-1",
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+            - name: gcs_credential
+              manifest: |-
+                {
+                  "as_file": true,
+                  "deployment_id": "${ec_deployment.example_keystore.id}",
+                  "setting_name": "gcs.client.default.credentials_file",
+                  "value": "${file(\"service-account-key.json\")}"
+                }
+              references:
+                deployment_id: ec_deployment.example_keystore.id
+              dependencies:
+                ec_deployment.example_keystore: |-
+                    {
+                      "deployment_template_id": "aws-io-optimized-v2",
+                      "elasticsearch": {
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "region": "us-east-1",
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+        argumentDocs:
+            as_file: (Boolean) Indicates the the remote keystore setting should be stored as a file. The default is false, which stores the keystore setting as string when value is a plain string.
+            deployment_id: (String) Deployment ID of the Deployment that holds the Elasticsearch cluster where the keystore setting will be written to.
+            id: (String) Unique identifier of this resource.
+            setting_name: (String) Name for the keystore setting, if the setting already exists in the Elasticsearch cluster, it will be overridden.
+            value: (String, Sensitive) Value of this setting. This can either be a string or a JSON object that is stored as a JSON string in the keystore.
+        importStatements: []
+    ec_deployment_extension:
+        subCategory: ""
+        name: ec_deployment_extension
+        title: ec_deployment_extension Resource
+        examples:
+            - name: example_extension
+              manifest: |-
+                {
+                  "description": "my extension",
+                  "extension_type": "bundle",
+                  "file_hash": "${filebase64sha256(local.file_path)}",
+                  "file_path": "${local.file_path}",
+                  "name": "my_extension",
+                  "version": "*"
+                }
+              references:
+                file_path: local.file_path
+              dependencies:
+                ec_deployment.with_extension: |-
+                    {
+                      "deployment_template_id": "aws-io-optimized-v2",
+                      "elasticsearch": {
+                        "extension": [
+                          {
+                            "name": "${ec_deployment_extension.example_extension.name}",
+                            "type": "bundle",
+                            "url": "${ec_deployment_extension.example_extension.url}",
+                            "version": "${data.ec_stack.latest.version}"
+                          }
+                        ],
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "name": "my_example_deployment",
+                      "region": "us-east-1",
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+            - name: example_extension
+              manifest: |-
+                {
+                  "description": "my extension",
+                  "download_url": "https://example.net",
+                  "extension_type": "bundle",
+                  "name": "my_extension",
+                  "version": "*"
                 }
               dependencies:
-                aws_instance.cluster: |-
+                ec_deployment.with_extension: |-
                     {
-                      "count": 3
+                      "deployment_template_id": "aws-io-optimized-v2",
+                      "elasticsearch": {
+                        "extension": [
+                          {
+                            "name": "${ec_deployment_extension.example_extension.name}",
+                            "type": "bundle",
+                            "url": "${ec_deployment_extension.example_extension.url}",
+                            "version": "${data.ec_stack.latest.version}"
+                          }
+                        ],
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "name": "my_example_deployment",
+                      "region": "us-east-1",
+                      "version": "${data.ec_stack.latest.version}"
                     }
-        argumentDocs: {}
+        argumentDocs:
+            description: (String) Description for the extension
+            download_url: (String) The URL to download the extension archive.
+            extension_type: (String) Extension type. Must be bundle or plugin. A bundle will usually contain a dictionary or script, where a plugin is compiled from source.
+            file_hash: (String) Hash value of the file. Triggers re-uploading the file on change.
+            file_path: (String) Local file path to upload as the extension.
+            id: (String) Unique identifier of this resource.
+            last_modified: (String) The datatime the extension was last modified.
+            name: (String) Name of the extension
+            size: (Number) The size of the extension file in bytes.
+            url: (String) The extension URL which will be used in the Elastic Cloud deployment plan.
+            version: (String) Elastic stack version. A full version (e.g 8.7.0) should be set for plugins. A wildcard (e.g 8.*) may be used for bundles.
+        importStatements:
+            - terraform import ec_deployment_extension.name 320b7b540dfc967a7a649c18e2fce4ed
+    ec_deployment_traffic_filter:
+        subCategory: ""
+        description: Provides an Elastic Cloud traffic filter resource, which allows traffic filter rules to be created, updated, and deleted. Traffic filter rules are used to limit inbound traffic to deployment resources.
+        name: ec_deployment_traffic_filter
+        title: ec_deployment_traffic_filter Resource
+        examples:
+            - name: example
+              manifest: |-
+                {
+                  "name": "my traffic filter name",
+                  "region": "us-east-1",
+                  "rule": [
+                    {
+                      "source": "0.0.0.0/0"
+                    }
+                  ],
+                  "type": "ip"
+                }
+              dependencies:
+                ec_deployment.example_minimal: |-
+                    {
+                      "deployment_template_id": "aws-io-optimized-v2",
+                      "elasticsearch": {
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "kibana": {},
+                      "name": "my_example_deployment",
+                      "region": "us-east-1",
+                      "traffic_filter": [
+                        "${ec_deployment_traffic_filter.example.id}"
+                      ],
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+            - name: azure
+              manifest: |-
+                {
+                  "name": "my traffic filter name",
+                  "region": "${local.region}",
+                  "rule": [
+                    {
+                      "azure_endpoint_guid": "78c64959-fd88-41cc-81ac-1cfcdb1ac32e",
+                      "azure_endpoint_name": "my-azure-pl"
+                    }
+                  ],
+                  "type": "azure_private_endpoint"
+                }
+              references:
+                region: local.region
+              dependencies:
+                ec_deployment.example_minimal: |-
+                    {
+                      "deployment_template_id": "azure-io-optimized-v3",
+                      "elasticsearch": {
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "kibana": {},
+                      "name": "my_example_deployment",
+                      "region": "${local.region}",
+                      "traffic_filter": [
+                        "${ec_deployment_traffic_filter.azure.id}"
+                      ],
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+            - name: gcp_psc
+              manifest: |-
+                {
+                  "name": "my traffic filter name",
+                  "region": "${local.region}",
+                  "rule": [
+                    {
+                      "source": "18446744072646845332"
+                    }
+                  ],
+                  "type": "gcp_private_service_connect_endpoint"
+                }
+              references:
+                region: local.region
+              dependencies:
+                ec_deployment.example_minimal: |-
+                    {
+                      "deployment_template_id": "gcp-storage-optimized",
+                      "elasticsearch": {
+                        "hot": {
+                          "autoscaling": {}
+                        }
+                      },
+                      "kibana": {},
+                      "name": "my_example_deployment",
+                      "region": "${local.region}",
+                      "traffic_filter": [
+                        "${ec_deployment_traffic_filter.gcp_psc.id}"
+                      ],
+                      "version": "${data.ec_stack.latest.version}"
+                    }
+        argumentDocs:
+            azure_endpoint_guid: (String) Azure endpoint GUID. Only applicable when the ruleset type is set to azure_private_endpoint
+            azure_endpoint_name: (String) Azure endpoint name. Only applicable when the ruleset type is set to azure_private_endpoint
+            description: (String) Ruleset description
+            id: (String) Unique identifier of this resource.
+            include_by_default: (Boolean) Indicates that the ruleset should be automatically included in new deployments (Defaults to false)
+            name: (String) Name of the ruleset
+            region: (String) Filter region, the ruleset can only be attached to deployments in the specific region
+            rule: (Block Set) Set of rules, which the ruleset is made of. (see below for nested schema)
+            source: '(String) Traffic filter source: IP address, CIDR mask, or VPC endpoint ID, only required when the type is not azure_private_endpoint'
+            type: (String) Type of the ruleset. It can be ip, vpce, azure_private_endpoint, or gcp_private_service_connect_endpoint
+        importStatements:
+            - terraform import ec_deployment_traffic_filter.name 320b7b540dfc967a7a649c18e2fce4ed
+    ec_deployment_traffic_filter_association:
+        subCategory: ""
+        description: Provides an Elastic Cloud traffic filter association resource, which allows traffic filter rules to be associated to an Elastic Cloud deployment outside of the control of Terraform. Associations can be created and deleted.
+        name: ec_deployment_traffic_filter_association
+        title: ec_deployment_traffic_filter_association Resource
+        examples:
+            - name: example
+              manifest: |-
+                {
+                  "deployment_id": "${ec_deployment.example.id}",
+                  "traffic_filter_id": "${ec_deployment_traffic_filter.example.id}"
+                }
+              references:
+                deployment_id: ec_deployment.example.id
+                traffic_filter_id: ec_deployment_traffic_filter.example.id
+              dependencies:
+                ec_deployment_traffic_filter.example: |-
+                    {
+                      "name": "my traffic filter name",
+                      "region": "us-east-1",
+                      "rule": [
+                        {
+                          "source": "0.0.0.0/0"
+                        }
+                      ],
+                      "type": "ip"
+                    }
+        argumentDocs:
+            deployment_id: (String) Required deployment ID where the traffic filter will be associated
+            id: (String) Unique identifier of this resource.
+            traffic_filter_id: (String) Required traffic filter ruleset ID to tie to a deployment
         importStatements: []
+    ec_snapshot_repository:
+        subCategory: ""
+        description: Manages Elastic Cloud Enterprise snapshot repositories.
+        name: ec_snapshot_repository
+        title: ec_snapshot_repository Resource
+        examples:
+            - name: this
+              manifest: |-
+                {
+                  "name": "my-snapshot-repository",
+                  "s3": {
+                    "access_key": "my-access-key",
+                    "bucket": "my-bucket",
+                    "secret_key": "my-secret-key"
+                  }
+                }
+        argumentDocs:
+            access_key: (String) An S3 access key. If set, the secret_key setting must also be specified. If unset, the client will use the instance or container role instead.
+            bucket: (String) Name of the S3 bucket to use for snapshots.
+            endpoint: (String) The S3 service endpoint to connect to. This defaults to s3.amazonaws.com but the AWS documentation lists alternative S3 endpoints. If you are using an S3-compatible service then you should set this to the service’s endpoint.
+            generic: (Attributes) Generic repository settings. (see below for nested schema)
+            id: (String) Unique identifier of this resource.
+            name: (String) The name of the snapshot repository configuration.
+            path_style_access: (Boolean) Whether to force the use of the path style access pattern. If true, the path style access pattern will be used. If false, the access pattern will be automatically determined by the AWS Java SDK (See AWS documentation for details). Defaults to false.
+            region: (String) Allows specifying the signing region to use. Specifying this setting manually should not be necessary for most use cases. Generally, the SDK will correctly guess the signing region to use. It should be considered an expert level setting to support S3-compatible APIs that require v4 signatures and use a region other than the default us-east-1. Defaults to empty string which means that the SDK will try to automatically determine the correct signing region.
+            s3: (Attributes) S3 repository settings. (see below for nested schema)
+            secret_key: (String, Sensitive) An S3 secret key. If set, the access_key setting must also be specified.
+            server_side_encryption: (Boolean) When set to true files are encrypted on server side using AES256 algorithm. Defaults to false.
+            settings: (String) An arbitrary JSON object containing the repository settings.
+            type: (String) Repository type
+        importStatements:
+            - terraform import ec_snapshot_repository.this my-snapshot-repository

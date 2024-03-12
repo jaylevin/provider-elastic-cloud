@@ -13,7 +13,7 @@ import (
 
 // Package type metadata.
 const (
-	Group   = "template.upbound.io"
+	Group   = "elastic-cloud.crossplane.io"
 	Version = "v1beta1"
 )
 
