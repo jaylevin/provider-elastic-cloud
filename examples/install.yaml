@@ -1,6 +1,6 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: upjet-provider-template
+  name: provider-elastic-cloud
 spec:
-  package: upbound/upjet-provider-template:v0.1.0
+  package: jaylevin/provider-elastic-cloud:v0.1.0
